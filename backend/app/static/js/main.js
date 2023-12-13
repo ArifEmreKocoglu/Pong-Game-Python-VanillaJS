@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 function routePage(path) {
+
     fetchContent(path).then(html => {
         document.getElementById('content').innerHTML = html;
         
@@ -18,10 +19,12 @@ function routePage(path) {
             initializePongGame();
         }
         else if(path.endsWith('/multi-game')) {
+            console.log("buradayım");
             startPongGame(); 
         }
     });
 }
+
 
 function fetchContent(url) {
     return fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
@@ -33,6 +36,7 @@ function fetchContent(url) {
         })
         .catch(error => console.error('Error:', error));
 }
+
 
 document.addEventListener('click', function (e) {
     if (e.target.tagName === 'A') {
@@ -244,59 +248,67 @@ function initializePongGame() {
 }
 
 
-function initializeMultiGame() {
-    
-        const serverUrl = 'wss://localhost:8000/ws/pong/';
-        const socket = new WebSocket(serverUrl);
-    
-        socket.addEventListener('open', (event) => {
-            console.log('WebSocket bağlantısı açıldı.');
-        });
-    
-        socket.addEventListener('close', (event) => {
-            console.log('WebSocket bağlantısı kapandı.');
-        });
-    
-        socket.addEventListener('message', (event) => {
-            const data = JSON.parse(event.data);
-            const action = data.action;
-    
-            if (action === 'matched') {
-                console.log('Eşleşme bulundu:', data.message);
-                hideLoadingIcon();
- 
-                history.pushState(null, '', '/multi-game');
-                routePage('/multi-game');
-            } else if (action === 'update_state') {
-                updateGameState(data.state);
-            }
-        });
-    
-        document.addEventListener('keydown', e => {
 
-            let paddleMovement = null;
-            if (e.key === 'ArrowUp') {
-                paddleMovement = 'up';
-            } else if (e.key === 'ArrowDown') {
-                paddleMovement = 'down';
+
+
+function initializeMultiGame() {
+    const serverUrl = 'wss://localhost:8000/ws/pong/';
+    const socket = new WebSocket(serverUrl);
+
+    socket.addEventListener('open', (event) => {
+        console.log('WebSocket bağlantısı açıldı.');
+    });
+
+    socket.addEventListener('close', (event) => {
+        console.log('WebSocket bağlantısı kapandı.');
+    });
+
+    socket.addEventListener('message', (event) => {
+        const data = JSON.parse(event.data);
+        const action = data.action;
+        console.log(data.action);
+        if (action === 'matched') {
+            console.log('Eşleşme bulundu:', data.message);
+            history.pushState(null, '', '/multi-game');
+            routePage('/multi-game');
+        
+        } else if (action === 'update_state') {
+            if (!data.state || typeof data.state !== 'object') {
+                console.error('Invalid or incomplete game state received:', data);
+                return;
             }
+            updateGameState(data.state);
+        }
+    });
     
-            if (paddleMovement) {
-                socket.send(JSON.stringify({ action: "move_paddle", direction: paddleMovement }));
-            }
-        });
-    }
+    document.addEventListener('keydown', e => {
+        let paddleMovement = null;
+        if (e.key === 'ArrowUp') {
+            paddleMovement = 'up';
+        } else if (e.key === 'ArrowDown') {
+            paddleMovement = 'down';
+        }
+
+        if (paddleMovement) {
+            socket.send(JSON.stringify({ action: "move_paddle", direction: paddleMovement }));
+        }
+    });
+}
+
+
+let ball, playerPaddleY, opponentPaddleY, playerScore, opponentScore;
 
 function startPongGame() {
     const canvas = document.getElementById('pongCanvas');
     const ctx = canvas.getContext('2d');
-    let playerScore = 0, opponentScore = 0;
-    const winningScore = 10;
-    const paddleSpeed = 40;
-    let ball = { x: canvas.width / 2, y: canvas.height / 2, radius: 10, speedX: 5, speedY: 5 };
-    let paddleHeight = 100, paddleWidth = 10;
-    let playerPaddleY = (canvas.height - paddleHeight) / 2, opponentPaddleY = (canvas.height - paddleHeight) / 2;
 
+    playerScore = 0, opponentScore = 0;
+    const winningScore = 10;
+    ball = { x: canvas.width / 2, y: canvas.height / 2, radius: 10 };
+    let paddleHeight = 100, paddleWidth = 10;
+    playerPaddleY = canvas.height / 2 - paddleHeight / 2;
+    opponentPaddleY = canvas.height / 2 - paddleHeight / 2;
+    
     function drawPaddle(x, y) {
         ctx.fillStyle = 'white';
         ctx.fillRect(x, y, paddleWidth, paddleHeight);
@@ -317,26 +329,13 @@ function startPongGame() {
         ctx.fillText(`Opponent: ${opponentScore}`, canvas.width - 200, 50);
     }
 
-    function checkForWinner(playerScore, aiScore) {
-        if (playerScore >= 10 || aiScore >= 10) {
-
-            const winner = playerScore >= 10 ? 'player' : 'ai';
-            socket.send(JSON.stringify({ action: "game_over", winner: winner }));
-            alert(winner + ' kazandı!');
-
-            history.pushState(null, '', '/user-page');
-            routePage('/user-page');
+    function checkForWinner() {
+        if (playerScore >= winningScore || opponentScore >= winningScore) {
+            const winner = playerScore >= winningScore ? 'Player' : 'Opponent';
+            alert(`${winner} kazandı!`);
+            socket.close();  // WebSocket bağlantısını kapat
+            history.pushState(null, '', '/user-page');  // Kullanıcı sayfasına yönlendir
         }
-    }
-
-    function updateGameState(state) {
-
-        ball.x = state.ball.x;
-        ball.y = state.ball.y;
-        playerPaddleY = state.playerPaddleY;
-        opponentPaddleY = state.opponentPaddleY;
-        playerScore = state.playerScore;
-        opponentScore = state.opponentScore;
     }
 
     function gameLoop() {
@@ -345,17 +344,24 @@ function startPongGame() {
         drawPaddle(canvas.width - paddleWidth, opponentPaddleY);
         drawBall();
         drawScore();
-        
-
-        updateGameState(gameState); 
-        
-        checkForWinner(playerScore, opponentScore);
-        
+        checkForWinner();
         requestAnimationFrame(gameLoop);
     }
-    let gameState = {};
 
     gameLoop();
+}
+
+function updateGameState(state) {
+    // Oyun durumunun güncellenmesi
+    console.log(playerPaddleY);
+    if (ball && playerPaddleY !== undefined && opponentPaddleY !== undefined) {
+        ball.x = state.ball.x;
+        ball.y = state.ball.y;
+        playerPaddleY = state.player_paddle.y;
+        opponentPaddleY = state.opponent_paddle.y;
+        playerScore = state.player_score;
+        opponentScore = state.opponent_score;
+    }
 }
 
 function showLoadingIcon() {

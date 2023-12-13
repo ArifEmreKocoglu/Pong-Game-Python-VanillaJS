@@ -7,11 +7,6 @@ function routePage(path) {
     fetchContent(path).then(html => {
         document.getElementById('content').innerHTML = html;
         
-        const login42Button = document.getElementById('42Login');
-        if (login42Button) {
-            login42Button.addEventListener('click', handle42LoginClick);
-        }
-
         if (path.endsWith('/login')) {
             initializeLoginForm();
         } else if (path.endsWith('/register')) {
@@ -29,7 +24,8 @@ function routePage(path) {
     });
 }
 
-function handle42LoginClick() {
+
+document.getElementById('42Login').addEventListener('click', function() {
     console.log("saaa");
     fetch('https://127.0.0.1/8000/api/ft_api', {
         method: 'POST',
@@ -54,8 +50,8 @@ function handle42LoginClick() {
     .catch(function (error) {
         console.error('Giriş Hatası', error);
     });
+});
 
-}
 
 function fetchContent(url) {
     return fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })

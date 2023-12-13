@@ -4,14 +4,37 @@ document.addEventListener('DOMContentLoaded', function () {
 
 function routePage(path) {
 
+    document.getElementById('42Login').addEventListener('click', function() {
+        console.log("saaa");
+        fetch('https://127.0.0.1/8000/api/ft_api', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include'
+        })
+        .then(response => {
+            if(response.ok) {
+    
+                return response.json();
+            }else{
+                throw new Error('Giriş Hatası');
+            }
+        })
+        .then(function (data) {
+            console.log('Giriş Başarılı', data);
+            history.pushState(null, '', '/user-page');
+            routePage('/user-page'); 
+        })
+        .catch(function (error) {
+            console.error('Giriş Hatası', error);
+        });
+    });
+
+    
     fetchContent(path).then(html => {
         document.getElementById('content').innerHTML = html;
         
-        const login42Button = document.getElementById('42Login');
-        if (login42Button) {
-            login42Button.addEventListener('click', handle42LoginClick);
-        }
-
         if (path.endsWith('/login')) {
             initializeLoginForm();
         } else if (path.endsWith('/register')) {
@@ -27,34 +50,6 @@ function routePage(path) {
             startPongGame(); 
         }
     });
-}
-
-function handle42LoginClick() {
-    console.log("saaa");
-    fetch('https://127.0.0.1/8000/api/ft_api', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        credentials: 'include'
-    })
-    .then(response => {
-        if(response.ok) {
-
-            return response.json();
-        }else{
-            throw new Error('Giriş Hatası');
-        }
-    })
-    .then(function (data) {
-        console.log('Giriş Başarılı', data);
-        history.pushState(null, '', '/user-page');
-        routePage('/user-page'); 
-    })
-    .catch(function (error) {
-        console.error('Giriş Hatası', error);
-    });
-
 }
 
 function fetchContent(url) {

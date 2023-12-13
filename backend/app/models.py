@@ -8,5 +8,10 @@ class CustomUser(AbstractUser):
 class GameRecord(models.Model):
     player1 = models.ForeignKey(CustomUser, related_name='games_player1', on_delete=models.CASCADE)
     player2 = models.ForeignKey(CustomUser, related_name='games_player2', on_delete=models.CASCADE)
-    winner = models.ForeignKey(CustomUser, related_name='games_won', on_delete=models.CASCADE)
+    winner = models.ForeignKey(CustomUser, related_name='games_won', on_delete=models.CASCADE, null=True, blank=True)
+    score_player1 = models.IntegerField(default=0)
+    score_player2 = models.IntegerField(default=0)
+    game_duration = models.DurationField(null=True, blank=True)
+    game_details = models.JSONField(null=True, blank=True)  # Oyunun hareketlerini veya önemli anlarını saklar
     date_played = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, choices=[('completed', 'Completed'), ('abandoned', 'Abandoned')], default='completed')
