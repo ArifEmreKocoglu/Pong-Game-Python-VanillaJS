@@ -65,12 +65,15 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
-     'whitenoise.middleware.WhiteNoiseMiddleware'
+    'whitenoise.middleware.WhiteNoiseMiddleware'
 ]
 
 ROOT_URLCONF = 'backend.urls'
 
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+
+
+# STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 TEMPLATES = [
     {
@@ -136,7 +139,7 @@ DATABASES = {
         'NAME': 'sql',
         'USER': 'admin',
         'PASSWORD': 'admin',
-        'HOST': 'localhost',  # Varsayılan olarak localhost
+        'HOST': 'backend-postgres-1',  # Varsayılan olarak localhost
         'PORT': '5432',       # PostgreSQL'in varsayılan portu
     }
 }

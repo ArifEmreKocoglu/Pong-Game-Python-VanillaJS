@@ -1,0 +1,58 @@
+version: '3'
+
+networks:
+  transcendence:
+    name: transcendence
+
+volumes:
+  postgres_data:
+    driver: local
+    name: postgres_data
+
+  static_volume:
+    driver: local
+    name: static_volume
+    driver_opts:
+      type: none
+      o: bind
+      device: ./${DJANGO_FOLDER}/static
+
+  ssl_certificates:
+    driver: local
+    name: ssl_certificates
+    driver_opts:
+      type: none
+      o: bind
+      device: ./ssl
+
+services:
+  django:
+    build:
+      context: ./
+      dockerfile: Dockerfile-django
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+    networks:
+      - transcendence
+    restart: on-failure
+    volumes:
+      - static_volume:/usr/src/app/static
+
+  postgres:
+    image: postgres:latest
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    networks:
+      - transcendence
+    restart: on-failure
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+

@@ -19,7 +19,6 @@ function routePage(path) {
             initializePongGame();
         }
         else if(path.endsWith('/multi-game')) {
-            console.log("buradayım");
             startPongGame(); 
         }
     });
@@ -27,6 +26,8 @@ function routePage(path) {
 
 
 function fetchContent(url) {
+    // const fullUrl = `https://127.0.0.1:8000${url}`;
+    console.log(url);
     return fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(response => {
             if (!response.ok) {
@@ -55,7 +56,7 @@ window.addEventListener('popstate', function () {
 
 function initializeUserPage() {
     document.getElementById('logoutButton').addEventListener('click', function() {
-        fetch('https://127.0.0.1:8000/api/logout/', {
+        fetch('https://0.0.0.0:8000/api/logout/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -72,7 +73,6 @@ function initializeUserPage() {
     });
 
     document.getElementById('searchGameButton').addEventListener('click', function() {
-        console.log("saa");
         showLoadingIcon();
         initializeMultiGame();
     });
@@ -85,7 +85,7 @@ function initializeLoginForm() {
         var username = document.getElementById('loginUsername').value;
         var password = document.getElementById('loginPassword').value;
 
-        fetch('https://127.0.0.1:8000/api/login/', {
+        fetch('https://0.0.0.0:8000/api/login/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -125,7 +125,7 @@ function initializeRegisterForm() {
         var password = document.getElementById('registerPassword').value;
 
 
-        fetch('https://127.0.0.1:8000/api/register/', {
+        fetch('https://0.0.0.0:8000/api/register/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -252,7 +252,7 @@ function initializePongGame() {
 
 
 function initializeMultiGame() {
-    const serverUrl = 'wss://localhost:8000/ws/pong/';
+    const serverUrl = 'wss://0.0.0.0:8000/ws/pong/';
     const socket = new WebSocket(serverUrl);
 
     socket.addEventListener('open', (event) => {

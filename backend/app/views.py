@@ -8,8 +8,7 @@ from rest_framework import status
 from rest_framework.views import APIView
 from django.contrib.auth import authenticate, login, logout
 
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
+
 
 
 # # 42 API
@@ -69,23 +68,6 @@ class UserRegisterView(generics.CreateAPIView):
 
 
 
-# class UserLoginView(APIView):
-#     def post(self, request):
-#         username = request.data.get('username')
-#         password = request.data.get('password')
-
-#         user = authenticate(username=username, password=password)
-
-#         if user:
-#             login(request, user)
-#             print(request.user.is_authenticated)
-#             return Response({'message': 'Oturum açma başarılı.'})
-#         else:
-#             return Response({'error': 'Kullanıcı adı veya şifre hatalı.'}, status=status.HTTP_401_UNAUTHORIZED)
-
-
-
-
 class UserLoginView(APIView):
     def post(self, request):
         username = request.data.get('username')
@@ -95,19 +77,7 @@ class UserLoginView(APIView):
 
         if user:
             login(request, user)
-
-            # Kullanıcı adını ve ID'sini WebSocket bağlantısına gönder
-            channel_layer = get_channel_layer()
-            async_to_sync(channel_layer.group_add)("pong_game", self.channel_name)
-            async_to_sync(channel_layer.group_send)(
-                "pong_game",
-                {
-                    "type": "user.login",
-                    "username": username,
-                    "user_id": user.id,
-                },
-            )
-
+            print(request.user.is_authenticated)
             return Response({'message': 'Oturum açma başarılı.'})
         else:
             return Response({'error': 'Kullanıcı adı veya şifre hatalı.'}, status=status.HTTP_401_UNAUTHORIZED)

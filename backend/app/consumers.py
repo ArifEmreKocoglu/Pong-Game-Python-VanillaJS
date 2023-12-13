@@ -69,7 +69,7 @@ class PongConsumer(AsyncWebsocketConsumer):
                 self.update_ball_position()
                 # self.update_game_state('none')
                 if self.player and self.player.opponent:
-                    print(self.player.opponent)
+                    print("selam")
                     await self.send_game_state_to_all()
                 else:
                     break  # Oyun döngüsünü durdur eğer bir oyuncu ayrılmışsa
