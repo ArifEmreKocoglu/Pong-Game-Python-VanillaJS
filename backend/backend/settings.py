@@ -31,7 +31,7 @@ CORS_ALLOW_CREDENTIALS = True
 SESSION_COOKIE_DOMAIN = None
 
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '192.168.137.137', '192.168.137.1']
+ALLOWED_HOSTS = ['*']
 
 AUTH_USER_MODEL = 'app.CustomUser'
 

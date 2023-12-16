@@ -56,7 +56,7 @@ window.addEventListener('popstate', function () {
 
 function initializeUserPage() {
     document.getElementById('logoutButton').addEventListener('click', function() {
-        fetch('https://0.0.0.0:8000/api/logout/', {
+        fetch(`https://${window.location.hostname}:8000/api/logout/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -85,7 +85,7 @@ function initializeLoginForm() {
         var username = document.getElementById('loginUsername').value;
         var password = document.getElementById('loginPassword').value;
 
-        fetch('https://0.0.0.0:8000/api/login/', {
+        fetch(`https://${window.location.hostname}:8000/api/login/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -125,7 +125,7 @@ function initializeRegisterForm() {
         var password = document.getElementById('registerPassword').value;
 
 
-        fetch('https://0.0.0.0:8000/api/register/', {
+        fetch(`https://${window.location.hostname}:8000/api/register/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -249,10 +249,12 @@ function initializePongGame() {
 
 
 
-
+let playerUsername = null;
+let opponentUsername = null;
+let myPaddle = null;
 
 function initializeMultiGame() {
-    const serverUrl = 'wss://0.0.0.0:8000/ws/pong/';
+    const serverUrl = `wss://${window.location.hostname}:8000/ws/pong/`;
     const socket = new WebSocket(serverUrl);
 
     socket.addEventListener('open', (event) => {
@@ -266,13 +268,23 @@ function initializeMultiGame() {
     socket.addEventListener('message', (event) => {
         const data = JSON.parse(event.data);
         const action = data.action;
-        console.log(data.action);
         if (action === 'matched') {
             console.log('Eşleşme bulundu:', data.message);
+            myPaddle = data.paddle;
+            playerUsername = data.username;
+            opponentUsername = data.opponent_username;
+        
             history.pushState(null, '', '/multi-game');
             routePage('/multi-game');
         
-        } else if (action === 'update_state') {
+        }else if (action === 'score_update') {
+            if (data.username === playerUsername) {
+                playerScore = data.score;
+            } else {
+                opponentScore = data.score;
+            }
+        }
+        else if (action === 'update_state') {
             if (!data.state || typeof data.state !== 'object') {
                 console.error('Invalid or incomplete game state received:', data);
                 return;
@@ -283,16 +295,13 @@ function initializeMultiGame() {
     
     document.addEventListener('keydown', e => {
         let paddleMovement = null;
-        if (e.key === 'ArrowUp') {
-            paddleMovement = 'up';
-        } else if (e.key === 'ArrowDown') {
-            paddleMovement = 'down';
-        }
-
-        if (paddleMovement) {
-            socket.send(JSON.stringify({ action: "move_paddle", direction: paddleMovement }));
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            paddleMovement = e.key === 'ArrowUp' ? 'up' : 'down';
+            socket.send(JSON.stringify({ action: "move_paddle", direction: paddleMovement, username: playerUsername }));
         }
     });
+    
+    
 }
 
 
@@ -325,16 +334,21 @@ function startPongGame() {
     function drawScore() {
         ctx.fillStyle = 'white';
         ctx.font = '24px Arial';
-        ctx.fillText(`Player: ${playerScore}`, 100, 50);
-        ctx.fillText(`Opponent: ${opponentScore}`, canvas.width - 200, 50);
+        if (myPaddle === 'left') {
+            ctx.fillText(`${playerUsername}: ${playerScore}`, 100, 50); 
+            ctx.fillText(`${opponentUsername}: ${opponentScore}`, canvas.width - 200, 50);
+        } else {
+            ctx.fillText(`${opponentUsername}: ${opponentScore}`, 100, 50);
+            ctx.fillText(`${playerUsername}: ${playerScore}`, canvas.width - 200, 50);
+        }
     }
 
     function checkForWinner() {
         if (playerScore >= winningScore || opponentScore >= winningScore) {
             const winner = playerScore >= winningScore ? 'Player' : 'Opponent';
             alert(`${winner} kazandı!`);
-            socket.close();  // WebSocket bağlantısını kapat
-            history.pushState(null, '', '/user-page');  // Kullanıcı sayfasına yönlendir
+            socket.close();
+            history.pushState(null, '', '/user-page');
         }
     }
 
@@ -352,13 +366,18 @@ function startPongGame() {
 }
 
 function updateGameState(state) {
-    // Oyun durumunun güncellenmesi
-    console.log(playerPaddleY);
     if (ball && playerPaddleY !== undefined && opponentPaddleY !== undefined) {
         ball.x = state.ball.x;
         ball.y = state.ball.y;
+
         playerPaddleY = state.player_paddle.y;
         opponentPaddleY = state.opponent_paddle.y;
+
+        console.log("opponentPaddleY");
+        console.log(opponentPaddleY);
+        console.log("playerPaddleY");
+        console.log(playerPaddleY);
+        
         playerScore = state.player_score;
         opponentScore = state.opponent_score;
     }
