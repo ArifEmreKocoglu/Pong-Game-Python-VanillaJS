@@ -4,9 +4,6 @@ import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from channels.auth import get_user, get_user_model
-# from django.contrib.auth.models import AnonymousUser
-# from app.models import CustomUser, GameRecord
-
 
 waiting_players = list()
 
@@ -52,12 +49,12 @@ class PongConsumer(AsyncWebsocketConsumer):
 
     async def match_players(self):
         if len(waiting_players) >= 2:
-            player1 = waiting_players.pop()
-            player2 = waiting_players.pop()
+            player1 = waiting_players.pop(0)
+            player2 = waiting_players.pop(0)
             player1.opponent = player2
             player2.opponent = player1
 
-            await self.notify_players_of_match(player1, player2, "left", "right")
+            await self.notify_players_of_match(player1, player2, "right", "left")
             await self.start_game(player1, player2)
 
     async def notify_players_of_match(self, player1, player2, player1_paddle, player2_paddle):
@@ -66,14 +63,14 @@ class PongConsumer(AsyncWebsocketConsumer):
             'message': 'Eşleşme bulundu, oyun başlıyor.',
             'paddle': player1_paddle,
             'username': player1.username,
-            'opponent_username': player2.username  # Rakibin kullanıcı adı
+            'opponent_username': player2.username
         }
         match_message_player2 = {
             'action': 'matched',
             'message': 'Eşleşme bulundu, oyun başlıyor.',
             'paddle': player2_paddle,
             'username': player2.username,
-            'opponent_username': player1.username  # Rakibin kullanıcı adı
+            'opponent_username': player1.username 
         }
         player1.paddle_side = player1_paddle
         player2.paddle_side = player2_paddle
@@ -94,12 +91,21 @@ class PongConsumer(AsyncWebsocketConsumer):
                 await asyncio.sleep(0.1)
                 self.update_ball_position()
                 if self.player and self.player.opponent:
-                    await self.send_game_state_to_all()
+                    await self.send_ball_position_to_all() 
                 else:
                     break
             except Exception as e:
                 print(f"Oyun döngüsünde hata: {e}")
                 break
+
+    async def send_ball_position_to_all(self):
+        ball_state = {'ball': self.ball}
+        if self.player:
+            await self.send_to_player(self.player, {'action': 'update_ball', 'state': ball_state})
+        if self.player.opponent:
+            await self.send_to_player(self.player.opponent, {'action': 'update_ball', 'state': ball_state})
+
+
 
     def update_ball_position(self):
         self.ball['x'] += self.ball_speed['x']
@@ -109,25 +115,28 @@ class PongConsumer(AsyncWebsocketConsumer):
         if self.ball['y'] - self.ball['radius'] <= 0 or self.ball['y'] + self.ball['radius'] >= self.game_height:
             self.ball_speed['y'] *= -1
         if self.ball['x'] - self.ball['radius'] <= 0:
-            self.opponent_score += 1
-            self.notify_score_update(self.player.opponent.username, self.opponent_score)
+            self.player_score += 1
+            asyncio.create_task(self.notify_score_update())
             self.reset_ball()
         elif self.ball['x'] + self.ball['radius'] >= self.game_width:
-            self.player_score += 1
-            self.notify_score_update(self.player.username, self.player_score)
+            self.opponent_score += 1
+            asyncio.create_task(self.notify_score_update())
             self.reset_ball()
 
 
-    async def notify_score_update(self, username, score):
-        message = {
-            'action': 'score_update',
-            'username': username,
-            'score': score
-        }
-        await self.send_to_player(self.player, message)
-        if self.player.opponent:
-            await self.send_to_player(self.player.opponent, message)
-            
+    async def notify_score_update(self):
+        if self.player and self.player.opponent:
+            score_message = {
+                'action': 'update_score',
+                'player_username': self.player.username,
+                'opponent_username': self.player.opponent.username,
+                'player_score': self.player_score,
+                'opponent_score': self.opponent_score
+            }
+            await self.send_to_player(self.player, score_message)
+            await self.send_to_player(self.player.opponent, score_message)
+
+
     def is_ball_hit_paddle(self):
         if self.ball['x'] - self.ball['radius'] <= self.player_paddle['width']:
             if self.ball['y'] >= self.player_paddle['y'] and self.ball['y'] <= self.player_paddle['y'] + self.player_paddle['height']:
@@ -144,9 +153,9 @@ class PongConsumer(AsyncWebsocketConsumer):
     async def send_game_state_to_all(self):
         game_state = self.get_game_state()
         if self.player:
-            await self.send_game_state(game_state, self.player)
+            await self.send_to_player(self.player, {'action': 'update_state', 'state': game_state})
         if self.player.opponent:
-            await self.send_game_state(game_state, self.player.opponent)
+            await self.send_to_player(self.player.opponent, {'action': 'update_state', 'state': game_state})
 
     def get_game_state(self):
         return {
@@ -164,19 +173,21 @@ class PongConsumer(AsyncWebsocketConsumer):
         }))
 
 
+    # receive fonksiyonunu güncelleyin
     async def receive(self, text_data):
-            text_data_json = json.loads(text_data)
-            action = text_data_json.get('action')
-            direction = text_data_json.get('direction')
+        text_data_json = json.loads(text_data)
+        action = text_data_json.get('action')
+        direction = text_data_json.get('direction')
+        username = text_data_json.get('username')
 
-            if action == 'move_paddle':
-                # Mesajın oyuncudan mı yoksa rakibinden mi geldiğini kontrol edin ve doğru çubuğu güncelleyin
-                if text_data_json.get('username') == self.player.username:
-                    self.update_paddle_position(direction, self.player.paddle_side)
-                elif self.player.opponent and text_data_json.get('username') == self.player.opponent.username:
-                    self.update_paddle_position(direction, self.player.opponent.paddle_side)
+        if action == 'move_paddle':
+            if username == self.player.username:
+                self.update_paddle_position(direction, self.player.paddle_side)
+            elif self.player.opponent and username == self.player.opponent.username:
+                self.update_paddle_position(direction, self.player.opponent.paddle_side)
+            await self.send_game_state_to_all()
 
-                await self.send_game_state_to_all()
+
 
     async def send_to_player(self, player, message):
         await player.socket.send(text_data=json.dumps(message))
@@ -189,29 +200,14 @@ class PongConsumer(AsyncWebsocketConsumer):
 
         return self.get_game_state()
 
+    # Backend: update_paddle_position fonksiyonunu güncelleyin
     def update_paddle_position(self, direction, paddle_side):
-            # Çubuk tarafına göre doğru çubuğu güncelleyin
-            paddle = self.player_paddle if paddle_side == 'left' else self.opponent_paddle
-            if direction == 'up':
-                paddle['y'] = max(paddle['y'] - self.paddle_speed, 0)
-            elif direction == 'down':
-                paddle['y'] = min(paddle['y'] + self.paddle_speed, self.max_paddle_y)
+        if paddle_side == 'right':
+            paddle = self.opponent_paddle  # İkinci oyuncu için sağ raketi
+        else:
+            paddle = self.player_paddle  # İlk oyuncu için sol raketi
 
-
-
-    # async def receive(self, text_data):
-    #         text_data_json = json.loads(text_data)
-    #         action = text_data_json.get('action')
-    #         direction = text_data_json.get('direction')
-    #         username = text_data_json.get('username')
-
-    #         if action == 'move_paddle':
-    #             if username == self.player.username:
-    #                 self.update_game_state(direction, self.player.username)
-    #             elif self.player.opponent and username == self.player.opponent.username:
-    #                 self.update_game_state(direction, self.player.opponent.username)
-
-    #             game_state = self.get_game_state()
-    #             await self.send_game_state(game_state, self.player)
-    #             if self.player.opponent:
-    #                 await self.send_game_state(game_state, self.player.opponent)
+        if direction == 'up':
+            paddle['y'] = max(paddle['y'] - self.paddle_speed, 0)
+        elif direction == 'down':
+            paddle['y'] = min(paddle['y'] + self.paddle_speed, self.max_paddle_y)

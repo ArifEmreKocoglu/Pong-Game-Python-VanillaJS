@@ -1,3 +1,10 @@
+let winner = null;
+let playerUsername = null;
+let opponentUsername = null;
+
+let playerScore;
+let opponentScore;
+
 document.addEventListener('DOMContentLoaded', function () {
     routePage(window.location.pathname); // İlk yüklemeyi ele al
 });
@@ -76,6 +83,45 @@ function initializeUserPage() {
         showLoadingIcon();
         initializeMultiGame();
     });
+    updateMatchHistory();
+}
+
+function updateMatchHistory() {
+    let matchCount = 0
+    const matchHistory = document.getElementById('match-history');
+
+    // Yeni satır oluştur
+    const row = document.createElement('tr');
+
+    // Sıra numarası sütunu
+    const th = document.createElement('th');
+    th.scope = 'row';
+    th.textContent = (matchCount + 1).toString();
+    row.appendChild(th);
+
+    // Oyuncu ismi sütunu
+    const playerCell = document.createElement('td');
+    playerCell.textContent = playerUsername;
+    row.appendChild(playerCell);
+
+    // Rakip ismi sütunu
+    const opponentCell = document.createElement('td');
+    opponentCell.textContent = opponentUsername;
+    row.appendChild(opponentCell);
+
+    // Skor sütunu
+    const scoreCell = document.createElement('td');
+    scoreCell.textContent = `${playerScore} - ${opponentScore}`;
+    row.appendChild(scoreCell);
+
+    // Satırı tabloya ekle
+    matchHistory.appendChild(row);
+
+    matchCount++; // Sayacı arttır
+
+    // Skorları sıfırla veya güncelle
+    playerScore = 0;
+    opponentScore = 0;
 }
 
 
@@ -249,13 +295,12 @@ function initializePongGame() {
 
 
 
-let playerUsername = null;
-let opponentUsername = null;
-let myPaddle = null;
 
+let myPaddle = null;
+let socket;
 function initializeMultiGame() {
     const serverUrl = `wss://${window.location.hostname}:8000/ws/pong/`;
-    const socket = new WebSocket(serverUrl);
+    socket = new WebSocket(serverUrl);
 
     socket.addEventListener('open', (event) => {
         console.log('WebSocket bağlantısı açıldı.');
@@ -273,23 +318,31 @@ function initializeMultiGame() {
             myPaddle = data.paddle;
             playerUsername = data.username;
             opponentUsername = data.opponent_username;
-        
+            myPaddle = data.paddle;
             history.pushState(null, '', '/multi-game');
             routePage('/multi-game');
         
-        }else if (action === 'score_update') {
-            if (data.username === playerUsername) {
-                playerScore = data.score;
-            } else {
-                opponentScore = data.score;
-            }
+        }
+        else if (action === 'update_ball'){
+
+            updateBallPosition(data.state.ball);
+        }else if (action === 'update_score'){
+
+            updateScores({
+                player_username: data.player_username,
+                player_score: data.player_score,
+                opponent_score: data.opponent_score
+            });
+
         }
         else if (action === 'update_state') {
+            
             if (!data.state || typeof data.state !== 'object') {
                 console.error('Invalid or incomplete game state received:', data);
                 return;
             }
-            updateGameState(data.state);
+            updatePaddlePositions(data.state);
+            
         }
     });
     
@@ -297,6 +350,7 @@ function initializeMultiGame() {
         let paddleMovement = null;
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
             paddleMovement = e.key === 'ArrowUp' ? 'up' : 'down';
+            console.log(playerUsername);
             socket.send(JSON.stringify({ action: "move_paddle", direction: paddleMovement, username: playerUsername }));
         }
     });
@@ -304,19 +358,38 @@ function initializeMultiGame() {
     
 }
 
+function updateBallPosition(ballData) {
+    if (ball) {
+        ball.x = ballData.x;
+        ball.y = ballData.y;
+    }
+}
 
-let ball, playerPaddleY, opponentPaddleY, playerScore, opponentScore;
+// updatePaddlePositions fonksiyonunu güncelleyin
+function updatePaddlePositions(state) {
+    if (myPaddle === 'right') {
+        playerPaddleY = state.opponent_paddle.y;
+        opponentPaddleY = state.player_paddle.y;
+    } else {
+        playerPaddleY = state.player_paddle.y;
+        opponentPaddleY = state.opponent_paddle.y;
+    }
+}
 
+
+let ball, playerPaddleY, opponentPaddleY;
+let canvas;
+let ctx;
 function startPongGame() {
-    const canvas = document.getElementById('pongCanvas');
-    const ctx = canvas.getContext('2d');
+    canvas = document.getElementById('pongCanvas');
+    ctx = canvas.getContext('2d');
 
     playerScore = 0, opponentScore = 0;
-    const winningScore = 10;
+    const winningScore = 1;
     ball = { x: canvas.width / 2, y: canvas.height / 2, radius: 10 };
     let paddleHeight = 100, paddleWidth = 10;
-    playerPaddleY = canvas.height / 2 - paddleHeight / 2;
-    opponentPaddleY = canvas.height / 2 - paddleHeight / 2;
+    // playerPaddleY = canvas.height / 2 - paddleHeight / 2;
+    // opponentPaddleY = canvas.height / 2 - paddleHeight / 2;
     
     function drawPaddle(x, y) {
         ctx.fillStyle = 'white';
@@ -331,31 +404,27 @@ function startPongGame() {
         ctx.closePath();
     }
 
-    function drawScore() {
-        ctx.fillStyle = 'white';
-        ctx.font = '24px Arial';
-        if (myPaddle === 'left') {
-            ctx.fillText(`${playerUsername}: ${playerScore}`, 100, 50); 
-            ctx.fillText(`${opponentUsername}: ${opponentScore}`, canvas.width - 200, 50);
-        } else {
-            ctx.fillText(`${opponentUsername}: ${opponentScore}`, 100, 50);
-            ctx.fillText(`${playerUsername}: ${playerScore}`, canvas.width - 200, 50);
-        }
-    }
 
     function checkForWinner() {
         if (playerScore >= winningScore || opponentScore >= winningScore) {
-            const winner = playerScore >= winningScore ? 'Player' : 'Opponent';
-            alert(`${winner} kazandı!`);
+            winner = playerScore >= winningScore ? 'Player' : 'Opponent';
             socket.close();
-            history.pushState(null, '', '/user-page');
+                   // Bağlantının kapanmasını dinle
+            socket.onclose = function(event) {
+                console.log('WebSocket bağlantısı kapandı.');
+                // Bağlantı kapandıktan sonra sayfa yönlendirmesi yap
+                history.pushState(null, '', '/user-page');
+                routePage('/user-page');
+            };
         }
     }
 
     function gameLoop() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        drawPaddle(0, playerPaddleY);
-        drawPaddle(canvas.width - paddleWidth, opponentPaddleY);
+        const playerPaddleX = myPaddle === 'right' ? canvas.width - paddleWidth : 0;
+        const opponentPaddleX = myPaddle === 'right' ? 0 : canvas.width - paddleWidth;
+        drawPaddle(playerPaddleX, playerPaddleY);
+        drawPaddle(opponentPaddleX, opponentPaddleY);
         drawBall();
         drawScore();
         checkForWinner();
@@ -365,23 +434,31 @@ function startPongGame() {
     gameLoop();
 }
 
-function updateGameState(state) {
-    if (ball && playerPaddleY !== undefined && opponentPaddleY !== undefined) {
-        ball.x = state.ball.x;
-        ball.y = state.ball.y;
-
-        playerPaddleY = state.player_paddle.y;
-        opponentPaddleY = state.opponent_paddle.y;
-
-        console.log("opponentPaddleY");
-        console.log(opponentPaddleY);
-        console.log("playerPaddleY");
-        console.log(playerPaddleY);
-        
-        playerScore = state.player_score;
-        opponentScore = state.opponent_score;
+function updateScores(scoreData) {
+    if (scoreData.player_username === playerUsername) {
+        playerScore = scoreData.player_score;
+        opponentScore = scoreData.opponent_score;
+    } else {
+        playerScore = scoreData.opponent_score;
+        opponentScore = scoreData.player_score;
     }
+    drawScore();
 }
+
+function drawScore() {
+    ctx.fillStyle = 'white';
+    ctx.font = '24px Arial';
+
+    let leftUsername = myPaddle === 'left' ? playerUsername : opponentUsername;
+    let rightUsername = myPaddle === 'left' ? opponentUsername : playerUsername;
+    let leftScore = myPaddle === 'left' ?  opponentScore : playerScore;
+    let rightScore = myPaddle === 'left' ? playerScore :opponentScore;
+
+    ctx.fillText(`${leftUsername}: ${leftScore}`, 100, 50); 
+    ctx.fillText(`${rightUsername}: ${rightScore}`, canvas.width - 200, 50);
+}
+
+
 
 function showLoadingIcon() {
     const loadingIcon = document.getElementById('loadingIcon') || document.createElement('div');
