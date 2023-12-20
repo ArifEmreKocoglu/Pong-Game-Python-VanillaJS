@@ -1,28 +1,21 @@
 import logging
 from django.shortcuts import render, redirect
 from rest_framework import generics, status
-from .models import CustomUser
-from .serializers import UserSerializer
+from .models import CustomUser, GameRecord
+from .serializers import UserSerializer, GameRecordSerializer
 from rest_framework.response import Response
 from rest_framework import status
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from rest_framework.views import APIView
 from django.contrib.auth import authenticate, login, logout
-
-
-
-
-# # 42 API
-# API_URL = "https://api.intra.42.fr/oauth/authorize?client_id=u-s4t2ud-4bc482d21834a4addd9108c8db4a5f99efb73b172f1a4cb387311ee09a26173c&redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Fcheck_authorize%2F&response_type=code"
-# API_URR = "https://api.intra.42.fr/oauth/authorize?client_id=u-s4t2ud-4bc482d21834a4addd9108c8db4a5f99efb73b172f1a4cb387311ee09a26173c&redirect_uri=https%3A%2F%2Flocalhost%3A8000%2Fcheck_authorize%2F&response_type=code"
-# API_URU = "https://api.intra.42.fr/oauth/authorize?client_id=u-s4t2ud-4bc482d21834a4addd9108c8db4a5f99efb73b172f1a4cb387311ee09a26173c&redirect_uri=https%3A%2F%2Flocalhost%3A8000%2Fcheck_authorize%2F&response_type=code"
-# API_USER = 'https://api.intra.42.fr/v2/me'
-# token = '690c107e335181f7039f3792799aebb1fa4d55b320bd232dd68877c0cc13545d'
+from django.utils import timezone
+from channels.db import database_sync_to_async
+from rest_framework.authentication import TokenAuthentication, SessionAuthentication
 
 
 def homePage(request):
     path = request.path
-    print(path)
-    print(request.user.is_authenticated)
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         if path.startswith('/login'):
             return render(request, 'login.html')
@@ -39,15 +32,58 @@ def homePage(request):
             if request.user.is_authenticated:
                 return render(request, 'multi-game.html')
             else:
-                return HttpResponse(status=401) 
+                return HttpResponse(status=401)
+        elif path.startswith('/match-history'):
+            if request.user.is_authenticated:
+                return render(request, 'match-history.html')
+            else:
+                return HttpResponse(status=401)
         else:
             return render(request, 'index.html')
 
     return render(request, 'index.html')
 
+class GameResultsView(APIView):
+    authentication_classes = [SessionAuthentication]
+    def post(self, request):
+        data = request.data
 
+        player1_username = data.get('player1Username')
+        player2_username = data.get('player2Username')
+        try:
+            player1 = CustomUser.objects.get(username=player1_username)
+            player2 = CustomUser.objects.get(username=player2_username)
+        except CustomUser.DoesNotExist:
+            return Response({'error': 'Oyuncu bulunamadı.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        game_record = GameRecord(
+            player1=player1,
+            player2=player2,
+            score_player1=data.get('scorePlayer1'),
+            score_player2=data.get('scorePlayer2'),
+            date_played=timezone.now(),
+            status='completed'
+        )
+        game_record.save()
+
+        return Response({'message': 'Oyun kaydedildi.'}, status=status.HTTP_201_CREATED)
+
+
+class UserGameHistoryView(APIView):
+    authentication_classes = [SessionAuthentication]
+    def get(self, request):
+        print(request.user.is_authenticated)
+        if not request.user.is_authenticated:
+            return Response({'error': 'Kullanıcı girişi gereklidir.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        user_games = GameRecord.objects.filter(player1=request.user) | GameRecord.objects.filter(player2=request.user)
+        user_games = user_games.order_by('-date_played')
+        serializer = GameRecordSerializer(user_games, many=True)
+        print(serializer.data)
+        return Response(serializer.data)
 
 class UserRegisterView(generics.CreateAPIView):
+    authentication_classes = [TokenAuthentication]
     queryset = CustomUser.objects.all()
     serializer_class = UserSerializer
 
@@ -66,9 +102,8 @@ class UserRegisterView(generics.CreateAPIView):
             return Response({'error': 'Kullanıcı adı veya şifre hatalı.'}, status=status.HTTP_401_UNAUTHORIZED)
 
 
-
-
 class UserLoginView(APIView):
+    authentication_classes = [TokenAuthentication]
     def post(self, request):
         username = request.data.get('username')
         password = request.data.get('password')
@@ -77,7 +112,6 @@ class UserLoginView(APIView):
 
         if user:
             login(request, user)
-            print(request.user.is_authenticated)
             return Response({'message': 'Oturum açma başarılı.'})
         else:
             return Response({'error': 'Kullanıcı adı veya şifre hatalı.'}, status=status.HTTP_401_UNAUTHORIZED)
@@ -85,12 +119,10 @@ class UserLoginView(APIView):
 
 
 class LogoutView(APIView):
+    authentication_classes = [TokenAuthentication]
     def post(self, request):
-        print(request.user.is_authenticated)
         logout(request)
-        print(request.user.is_authenticated)
         return Response({'message': 'Çıkış yapıldı'}, status=status.HTTP_200_OK)
 
 
 from django.http import HttpResponse
-

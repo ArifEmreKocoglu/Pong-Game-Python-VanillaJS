@@ -72,6 +72,7 @@ class PongConsumer(AsyncWebsocketConsumer):
             'username': player2.username,
             'opponent_username': player1.username 
         }
+
         player1.paddle_side = player1_paddle
         player2.paddle_side = player2_paddle
         await self.send_to_player(player1, match_message_player1)
@@ -125,17 +126,55 @@ class PongConsumer(AsyncWebsocketConsumer):
 
 
     async def notify_score_update(self):
-        if self.player and self.player.opponent:
-            score_message = {
-                'action': 'update_score',
-                'player_username': self.player.username,
-                'opponent_username': self.player.opponent.username,
+        winning_score = 2
+        if self.player_score >= winning_score or self.opponent_score >= winning_score:
+            winner_username = self.player.username if self.player_score > self.opponent_score else self.player.opponent.username
+            print("Oyun sonlandırılıyor.")
+            await self.save_game_result(
+                self.player.username,
+                self.player.opponent.username,
+                self.player_score,
+                self.opponent_score
+            )
+            print("Oyun sonucu kaydedildi.")
+            end_game_message = {
+                'action': 'end_game',
+                'winner': winner_username,
                 'player_score': self.player_score,
                 'opponent_score': self.opponent_score
             }
-            await self.send_to_player(self.player, score_message)
-            await self.send_to_player(self.player.opponent, score_message)
+            await self.send_to_player(self.player, end_game_message)
+            await self.send_to_player(self.player.opponent, end_game_message)
+        else:
+            # Diğer durumlar için skor güncellemesi
+            if self.player and self.player.opponent:
+                score_message = {
+                    'action': 'update_score',
+                    'player_username': self.player.username,
+                    'opponent_username': self.player.opponent.username,
+                    'player_score': self.player_score,
+                    'opponent_score': self.opponent_score
+                }
+                await self.send_to_player(self.player, score_message)
+                await self.send_to_player(self.player.opponent, score_message)
 
+    async def save_game_result(self, player1_username, player2_username, score_player1, score_player2):
+        from .models import CustomUser, GameRecord
+        try:
+            player1 = await database_sync_to_async(CustomUser.objects.get)(username=player1_username)
+            player2 = await database_sync_to_async(CustomUser.objects.get)(username=player2_username)
+        except CustomUser.DoesNotExist:
+            print("Kullanıcı bulunamadı.")
+            return None
+        game_record = GameRecord(
+            player1=player1,
+            player2=player2,
+            score_player1=score_player1,
+            score_player2=score_player2,
+            status='completed'
+        )
+        await database_sync_to_async(game_record.save)()
+        return game_record
 
     def is_ball_hit_paddle(self):
         if self.ball['x'] - self.ball['radius'] <= self.player_paddle['width']:
@@ -200,12 +239,11 @@ class PongConsumer(AsyncWebsocketConsumer):
 
         return self.get_game_state()
 
-    # Backend: update_paddle_position fonksiyonunu güncelleyin
     def update_paddle_position(self, direction, paddle_side):
         if paddle_side == 'right':
-            paddle = self.opponent_paddle  # İkinci oyuncu için sağ raketi
+            paddle = self.opponent_paddle 
         else:
-            paddle = self.player_paddle  # İlk oyuncu için sol raketi
+            paddle = self.player_paddle
 
         if direction == 'up':
             paddle['y'] = max(paddle['y'] - self.paddle_speed, 0)

@@ -68,6 +68,7 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware'
 ]
 
+
 ROOT_URLCONF = 'backend.urls'
 
 STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
@@ -95,8 +96,10 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',  # Token Authentication kullanın
-    ],
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication'
+        
+    ]
     # ...
 }
 
@@ -139,11 +142,11 @@ DATABASES = {
         'NAME': 'sql',
         'USER': 'admin',
         'PASSWORD': 'admin',
-        'HOST': 'backend-postgres-1',  # Varsayılan olarak localhost
+        'HOST': 'localhost',  # Varsayılan olarak localhost
         'PORT': '5432',       # PostgreSQL'in varsayılan portu
     }
 }
-
+#backend-postgres-1
 
 
 # Password validation
@@ -175,6 +178,7 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 
 USE_TZ = True
+
 
 
 # Static files (CSS, JavaScript, Images)

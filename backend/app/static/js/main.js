@@ -4,6 +4,8 @@ let opponentUsername = null;
 
 let playerScore;
 let opponentScore;
+let matchCount = 0
+
 
 document.addEventListener('DOMContentLoaded', function () {
     routePage(window.location.pathname); // İlk yüklemeyi ele al
@@ -27,6 +29,9 @@ function routePage(path) {
         }
         else if(path.endsWith('/multi-game')) {
             startPongGame(); 
+        }
+        else if(path.endsWith('/match-history')) {
+            matchHistory();
         }
     });
 }
@@ -60,8 +65,43 @@ window.addEventListener('popstate', function () {
 });
 
 
+function matchHistory()
+{
+    document.getElementById('returnProfile').addEventListener('click', function() {
+        history.pushState(null, '', '/user-page');
+        routePage('/user-page');
+    });
+
+    fetch(`https://${window.location.hostname}:8000/api/match-history/`, { 
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log(data);
+        if (data.length > 0) {
+            displayMatchHistory(data);
+        } else {
+            console.log('Henüz oynanmış bir oyun yok.');
+        }
+    })
+    .catch(error => console.error('Error:', error));
+}
 
 function initializeUserPage() {
+    document.getElementById('showMatchHistory').addEventListener('click', function() { 
+
+        history.pushState(null, '', '/match-history');
+        routePage('/match-history');
+    });
     document.getElementById('logoutButton').addEventListener('click', function() {
         fetch(`https://${window.location.hostname}:8000/api/logout/`, {
             method: 'POST',
@@ -83,46 +123,103 @@ function initializeUserPage() {
         showLoadingIcon();
         initializeMultiGame();
     });
-    updateMatchHistory();
 }
 
-function updateMatchHistory() {
-    let matchCount = 0
+function displayMatchHistory(data) {
     const matchHistory = document.getElementById('match-history');
+    matchHistory.innerHTML = ''; // Mevcut içeriği temizle
+    data.forEach((match, index) => {
+        const row = document.createElement('tr');
+        // Sıra numarası
+        const th = document.createElement('th');
+        th.scope = 'row';
+        th.textContent = (index + 1).toString();
+        row.appendChild(th);
 
-    // Yeni satır oluştur
-    const row = document.createElement('tr');
+        // Maç tarihi
+        const dateCell = document.createElement('td');
+        dateCell.textContent = new Date(match.date_played).toLocaleDateString(); // Tarih formatlama
+        row.appendChild(dateCell);
 
-    // Sıra numarası sütunu
-    const th = document.createElement('th');
-    th.scope = 'row';
-    th.textContent = (matchCount + 1).toString();
-    row.appendChild(th);
+        // Oyuncu isimleri
+        if (playerUsername === match.player1_username)
+        {
+            const playerCell = document.createElement('td');
+            playerCell.textContent = match.player1_username;
+            row.appendChild(playerCell);
+    
+            const opponentCell = document.createElement('td');
+            opponentCell.textContent = match.player2_username;
+            row.appendChild(opponentCell);
+        }else{
+            const opponentCell = document.createElement('td');
+            opponentCell.textContent = match.player2_username;
+            row.appendChild(opponentCell);
 
-    // Oyuncu ismi sütunu
-    const playerCell = document.createElement('td');
-    playerCell.textContent = playerUsername;
-    row.appendChild(playerCell);
+            const playerCell = document.createElement('td');
+            playerCell.textContent = match.player1_username;
+            row.appendChild(playerCell);
+        }
+        // Skor
+        const scoreCell = document.createElement('td');
+        console.log(match.score_player1);
+        console.log(playerScore);
+        if(match.score_player2 < match.score_player1)
+        {
+            scoreCell.textContent = `${match.score_player2} - ${match.score_player1}`;
+        }else
+        {
+            scoreCell.textContent = `${match.score_player1} - ${match.score_player2}`;
+        }
+        row.appendChild(scoreCell);
 
-    // Rakip ismi sütunu
-    const opponentCell = document.createElement('td');
-    opponentCell.textContent = opponentUsername;
-    row.appendChild(opponentCell);
-
-    // Skor sütunu
-    const scoreCell = document.createElement('td');
-    scoreCell.textContent = `${playerScore} - ${opponentScore}`;
-    row.appendChild(scoreCell);
-
-    // Satırı tabloya ekle
-    matchHistory.appendChild(row);
-
-    matchCount++; // Sayacı arttır
-
-    // Skorları sıfırla veya güncelle
-    playerScore = 0;
-    opponentScore = 0;
+        matchHistory.appendChild(row);
+        console.log(matchHistory);
+    });
 }
+
+
+// function updateMatchHistory() {
+  
+//     const matchHistory = document.getElementById('match-history');
+//     console.log(matchCount);
+
+    
+//     // Yeni satır oluştur
+//     const row = document.createElement('tr');
+
+//     // Sıra numarası sütunu
+//     const th = document.createElement('th');
+//     th.scope = 'row';
+//     th.textContent = (matchCount).toString();
+//     row.appendChild(th);
+
+//     // Oyuncu ismi sütunu
+//     const playerCell = document.createElement('td');
+//     playerCell.textContent = playerUsername;
+//     row.appendChild(playerCell);
+
+//     // Rakip ismi sütunu
+//     const opponentCell = document.createElement('td');
+//     opponentCell.textContent = opponentUsername;
+//     row.appendChild(opponentCell);
+
+//     // Skor sütunu
+//     const scoreCell = document.createElement('td');
+//     scoreCell.textContent = `${playerScore} - ${opponentScore}`;
+//     row.appendChild(scoreCell);
+
+//     // Satırı tabloya ekle
+//     matchHistory.appendChild(row);
+
+//     console.log(matchHistory);
+
+//     matchCount++; // Sayacı arttır
+
+//     // Skorları sıfırla veya güncelle
+//     playerScore = 0;
+//     opponentScore = 0;
+// }
 
 
 function initializeLoginForm() {
@@ -342,7 +439,17 @@ function initializeMultiGame() {
                 return;
             }
             updatePaddlePositions(data.state);
-            
+        }
+        else if(action === 'end_game')
+        {
+            console.log('Oyun bitti.');
+            socket.close();
+            socket.onclose = function(event) {
+                console.log('WebSocket bağlantısı kapandı.');
+                history.pushState(null, '', '/match-history');
+                routePage('/match-history');
+
+            };
         }
     });
     
@@ -405,19 +512,21 @@ function startPongGame() {
     }
 
 
-    function checkForWinner() {
-        if (playerScore >= winningScore || opponentScore >= winningScore) {
-            winner = playerScore >= winningScore ? 'Player' : 'Opponent';
-            socket.close();
-                   // Bağlantının kapanmasını dinle
-            socket.onclose = function(event) {
-                console.log('WebSocket bağlantısı kapandı.');
-                // Bağlantı kapandıktan sonra sayfa yönlendirmesi yap
-                history.pushState(null, '', '/user-page');
-                routePage('/user-page');
-            };
-        }
-    }
+    // function checkForWinner() {
+    //     if (playerScore >= winningScore || opponentScore >= winningScore) {
+    //         winner = playerScore >= winningScore ? playerUsername : opponentUsername; // Kazanan oyuncunun kullanıcı adı
+    
+    //         socket.close();
+    
+    //         // WebSocket bağlantısı kapandıktan sonra çalışacak
+    //         socket.onclose = function(event) {
+    //             console.log('WebSocket bağlantısı kapandı.');
+    //             history.pushState(null, '', '/match-history');
+    //             routePage('/match-history');
+
+    //         };
+    //     }
+    // }
 
     function gameLoop() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -427,7 +536,7 @@ function startPongGame() {
         drawPaddle(opponentPaddleX, opponentPaddleY);
         drawBall();
         drawScore();
-        checkForWinner();
+        // checkForWinner();
         requestAnimationFrame(gameLoop);
     }
 

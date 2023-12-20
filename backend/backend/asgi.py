@@ -11,7 +11,6 @@ import app.routing
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 
-
 application = ProtocolTypeRouter({
     "http": get_asgi_application(),  # Django'nun standart HTTP işlemleri için
     "websocket": AuthMiddlewareStack(  # WebSocket bağlantıları için
