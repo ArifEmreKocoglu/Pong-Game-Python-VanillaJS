@@ -12,7 +12,11 @@ from django.contrib.auth import authenticate, login, logout
 from django.utils import timezone
 from channels.db import database_sync_to_async
 from rest_framework.authentication import TokenAuthentication, SessionAuthentication
-
+from .forms import CustomUserForm
+from django.contrib.auth.decorators import login_required
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
+from django.conf import settings
 
 def homePage(request):
     path = request.path
@@ -123,6 +127,27 @@ class LogoutView(APIView):
     def post(self, request):
         logout(request)
         return Response({'message': 'Çıkış yapıldı'}, status=status.HTTP_200_OK)
+
+
+
+class UploadAvatarView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        user = request.user
+        form = CustomUserForm(request.POST, request.FILES, instance=user)
+        if form.is_valid():
+            user = form.save()
+            if user.avatar:
+                avatar_url = user.avatar.url
+            else:
+                avatar_url = 'path/to/default/avatar.png'
+            avatar_url = request.build_absolute_uri(avatar_url)
+            return Response({'avatarUrl': avatar_url}, status=status.HTTP_200_OK)
+        else:
+            return Response(form.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 from django.http import HttpResponse

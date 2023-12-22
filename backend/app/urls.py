@@ -2,8 +2,9 @@ from django.urls import path, re_path
 from . import views
 from .views import UserRegisterView, UserLoginView
 
+
 urlpatterns = [
-    re_path(r'^(?:.*)/?$', views.homePage, name='home')
+    re_path(r'^(?!media/).*$', views.homePage, name='home'),
 ]
 
 

@@ -1,8 +1,21 @@
 USER PAGE
+{% load static %}
 
 <button id="logoutButton" class="btn btn-primary">Çıkış Yap</button>
 <button id="searchGameButton" class="btn btn-primary">MULTİ OYUN ARA</button>
 
 <div id="loadingIcon" style="display: none;">Arama yapılıyor...</div>
+
+<form id="avatarUploadForm" method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <input type="file" id="avatarFileInput" name="avatar">
+    <button  type="submit">Upload</button>
+</form>
+
+<img id="avatarImage" src="{% if user.avatar %}{{ user.avatar.url }}{% else %}{% static 'path/to/default/avatar.png' %}{% endif %}" alt="Profil Resmi">
+
+
+
 
 <buttom id="showMatchHistory" class="btn btn-primary">Maç geçmişine bak</buttom>

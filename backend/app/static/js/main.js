@@ -97,6 +97,35 @@ function matchHistory()
 }
 
 function initializeUserPage() {
+
+    document.getElementById('avatarFileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('avatarImage').src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    document.getElementById('avatarUploadForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        fetch(`https://${window.location.hostname}:8000/api/upload-avatar/`, {
+            method: 'POST',
+            body: formData,
+            credentials: 'include'
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Yanıt olarak alınan URL'i doğrudan kullan
+            document.getElementById('avatarImage').src = data.avatarUrl;
+            console.log(document.getElementById('avatarImage').src);
+        })
+        .catch(error => console.error('Error:', error));
+    });
+    
     document.getElementById('showMatchHistory').addEventListener('click', function() { 
 
         history.pushState(null, '', '/match-history');

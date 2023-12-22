@@ -16,14 +16,16 @@ Including another URLconf
 """
 
 from django.urls import path, include
-from app.views import UserRegisterView, UserLoginView, LogoutView, UserGameHistoryView, GameResultsView
+from app.views import UserRegisterView, UserLoginView, LogoutView, UserGameHistoryView, GameResultsView, UploadAvatarView
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path('api/game-results/', GameResultsView.as_view(), name='game-results'),
     path('api/match-history/', UserGameHistoryView.as_view(), name='match-history'),
     path('api/register/', UserRegisterView.as_view(), name='user-register'),
-    path('api/login/', UserLoginView.as_view(), name='user-login'),  # UserLoginView'ı ekledik
-    path('api/logout/', LogoutView.as_view(), name='logout'),  # Çıkış yapma URL'si
-    # path('api/usergamehistory/', UserGameHistoryView.as_view(), name='user-game-history'),
+    path('api/login/', UserLoginView.as_view(), name='user-login'), 
+    path('api/logout/', LogoutView.as_view(), name='logout'), 
+    path('api/upload-avatar/', UploadAvatarView.as_view(), name='upload-avatar'),
     path('', include('app.urls'))
-]
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
