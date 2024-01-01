@@ -142,7 +142,7 @@ DATABASES = {
         'NAME': 'sql',
         'USER': 'admin',
         'PASSWORD': 'admin',
-        'HOST': 'localhost',  # Varsayılan olarak localhost
+        'HOST': 'backend-postgres-1',  # Varsayılan olarak localhost
         'PORT': '5432',       # PostgreSQL'in varsayılan portu
     }
 }

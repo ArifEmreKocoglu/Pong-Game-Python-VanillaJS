@@ -4,6 +4,8 @@ import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from channels.auth import get_user, get_user_model
+from asgiref.sync import sync_to_async
+
 
 waiting_players = list()
 
@@ -249,3 +251,136 @@ class PongConsumer(AsyncWebsocketConsumer):
             paddle['y'] = max(paddle['y'] - self.paddle_speed, 0)
         elif direction == 'down':
             paddle['y'] = min(paddle['y'] + self.paddle_speed, self.max_paddle_y)
+
+
+
+class FriendshipConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.user_id = self.scope["user"].id  # Kullanıcının ID'si
+        self.room_group_name = f"user_{self.user_id}"  # Kullanıcıya özel grup adı
+
+        # Kullanıcıyı kendi özel grubuna kat
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        # Kullanıcıyı grubundan çıkar
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
+
+    # Bu fonksiyon, arkadaşlık isteği gönderildiğinde çağrılacak
+    async def friend_request(self, event):
+        # Gönderen kullanıcının bilgilerini al
+        from_user_id = event["from_user_id"]
+        from_user_username = event["from_user_username"]
+        friendship_id = event["friendship_id"]
+
+        # Hedef kullanıcıya bildirimi gönder
+        await self.send(text_data=json.dumps({
+            'action': 'friend_request',
+            'from_user_id': from_user_id,
+            'friendship_id': friendship_id,
+            'from_user_username': from_user_username
+        }))
+
+    async def friend_request_response(self, event):
+        response = event["response"]
+        to_user_username = event["to_user_username"]
+        friendship_id = event["friendship_id"]
+        from_user_id = event["from_user_id"]
+
+        # Gönderen kullanıcıya bildirimi gönder
+        await self.send(text_data=json.dumps({
+            'action': 'friend_request_response',
+            'response': response,
+            'from_user_id': from_user_id,
+            'friendship_id': friendship_id,
+            'to_user_username': to_user_username
+        }))
+
+    async def websocket_send(self, event):
+        await self.send(text_data=event["text"])
+
+    async def accept_friend_request(self, event):
+        friendship_id = event['friendship_id']
+        from_user_id = event['from_user_id']
+        to_user_id = event['to_user_id']
+ 
+        await self.send(text_data=json.dumps({
+            'action': 'accept_friend_request',
+            'message': 'Arkadaşlık isteği kabul edildi.',
+            'friendship_id': friendship_id,
+            'from_user_id': from_user_id
+        }))
+
+    async def reject_friend_request(self, event):
+
+        friendship_id = event['friendship_id']
+        from_user_id = event['from_user_id']  
+ 
+        await self.send(text_data=json.dumps({
+            'action': 'reject_friend_request',
+            'message': 'Arkadaşlık isteği reddedildi.',
+            'friendship_id': friendship_id,
+            'from_user_id': from_user_id
+        }))
+
+
+
+
+# TURNUVAAAAAAAAAAAA
+
+
+class TournamentConsumer(AsyncWebsocketConsumer):
+  
+    async def connect(self):
+        # Kullanıcıyı turnuva güncellemeleri grubuna ekleyin
+        await self.channel_layer.group_add("tournament_updates", self.channel_name)
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        # Kullanıcıyı gruptan çıkarın
+        await self.channel_layer.group_discard("tournament_updates", self.channel_name)
+
+    async def receive(self, text_data):
+        text_data_json = json.loads(text_data)
+        action = text_data_json['action']
+        
+        if action == 'create_tournament':
+            tournament_name = text_data_json['name']
+            nickname = text_data_json['nickname']  # Kullanıcıdan gelen nickname
+            user = self.scope["user"]  # WebSocket bağlantısının sahibi olan kullanıcı
+            
+            # Yeni turnuva oluştur ve turnuva oluşturanı katılımcı olarak ekle
+            tournament = await self.create_tournament(tournament_name, user, nickname)
+            
+            # Tüm bağlantılara yeni turnuva bilgisini gönder
+            await self.channel_layer.group_send(
+                "tournament_updates",
+                {
+                    "type": "send_tournament_update",
+                    "tournament": {
+                        "id": tournament.id,
+                        "name": tournament.name,
+                    }
+                }
+            )
+
+    @database_sync_to_async
+    def create_tournament(self, name, user, nickname):
+        from .models import Tournament, TournamentPlayer
+        tournament = Tournament.objects.create(name=name)
+        TournamentPlayer.objects.create(tournament=tournament, user=user, nickname=nickname)
+        return tournament
+
+    async def send_tournament_update(self, event):
+        await self.send(text_data=json.dumps({
+            'action': 'tournament_update',
+            'tournament': event['tournament']
+        }))

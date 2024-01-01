@@ -4,7 +4,7 @@ let opponentUsername = null;
 
 let playerScore;
 let opponentScore;
-let matchCount = 0
+let matchCount = 0;
 
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -32,6 +32,8 @@ function routePage(path) {
         }
         else if(path.endsWith('/match-history')) {
             matchHistory();
+        }else if(path.endsWith('/tournament-page')) {
+            fetchTournamentParticipants()
         }
     });
 }
@@ -152,6 +154,16 @@ function initializeUserPage() {
         showLoadingIcon();
         initializeMultiGame();
     });
+
+    initializeFriendshipWebSocket();
+    fetchAllUsers();
+    fetchFriendsList();
+
+    initializeTournamentWebSocket();
+    fetchTournaments();
+    createTournament();
+    
+    // fetchTournaments();
 }
 
 function displayMatchHistory(data) {
@@ -208,47 +220,252 @@ function displayMatchHistory(data) {
 }
 
 
-// function updateMatchHistory() {
-  
-//     const matchHistory = document.getElementById('match-history');
-//     console.log(matchCount);
 
-    
-//     // Yeni satır oluştur
-//     const row = document.createElement('tr');
 
-//     // Sıra numarası sütunu
-//     const th = document.createElement('th');
-//     th.scope = 'row';
-//     th.textContent = (matchCount).toString();
-//     row.appendChild(th);
 
-//     // Oyuncu ismi sütunu
-//     const playerCell = document.createElement('td');
-//     playerCell.textContent = playerUsername;
-//     row.appendChild(playerCell);
 
-//     // Rakip ismi sütunu
-//     const opponentCell = document.createElement('td');
-//     opponentCell.textContent = opponentUsername;
-//     row.appendChild(opponentCell);
 
-//     // Skor sütunu
-//     const scoreCell = document.createElement('td');
-//     scoreCell.textContent = `${playerScore} - ${opponentScore}`;
-//     row.appendChild(scoreCell);
 
-//     // Satırı tabloya ekle
-//     matchHistory.appendChild(row);
 
-//     console.log(matchHistory);
 
-//     matchCount++; // Sayacı arttır
+let friendSocket;
 
-//     // Skorları sıfırla veya güncelle
-//     playerScore = 0;
-//     opponentScore = 0;
-// }
+function initializeFriendshipWebSocket() {
+    const friendServerUrl = `wss://${window.location.hostname}:8000/ws/friendship/`;
+    friendSocket = new WebSocket(friendServerUrl);
+
+    friendSocket.addEventListener('open', (event) => {
+        console.log('Arkadaşlık WebSocket bağlantısı açıldı.');
+        loadAndDisplayFriendRequests()
+    });
+
+    friendSocket.addEventListener('close', (event) => {
+        console.log('Arkadaşlık WebSocket bağlantısı kapandı.');
+    });
+
+    friendSocket.addEventListener('message', (event) => {
+        const data = JSON.parse(event.data);
+        const action = data.action;
+        console.log(action);
+        if (action === 'friend_request') {
+            const fromUser = data.from_user_username;
+            console.log(`${fromUser} sizi arkadaş olarak eklemek istiyor.`);
+            addFriendRequestToList(data.friendship_id, fromUser);
+        } else if (action === 'friend_request_response') {
+            const response = data.response;
+            console.log(`Arkadaşlık isteği ${response}`);
+            addFriendRequestToList(data.friendship_id, fromUser);
+        }else if(action === 'friend_request_accepted')
+        {
+            fetchFriendsList();
+        }else if(action === 'reject_friend_request')
+        {
+            console.log(data.message);
+        }else if(action === 'friendship_deleted')
+        {
+            console.log("saa");
+            fetchFriendsList();         
+        }
+    });
+
+
+    function loadAndDisplayFriendRequests() {
+        fetch(`https://${window.location.hostname}:8000/api/friend-requests/`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            credentials: 'include'
+        })
+        .then(response => response.json())
+        .then(requests => {
+            requests.forEach(req => {
+                console.log(req.friendship_id);
+                console.log(req.from_user_username);
+                addFriendRequestToList(req.friendship_id, req.from_user_username);
+            });
+        })
+        .catch(error => console.error('Error:', error));
+    }
+
+
+    function addFriendRequestToList(userId, username) {
+        const list = document.getElementById('friendRequestsList');
+        if (!list) {
+            console.error('List element not found!');
+            return; // Exit the function if list doesn't exist
+        }
+        const listItem = document.createElement('li');
+        listItem.innerHTML = `
+            ${username} sizi arkadaş olarak eklemek istiyor.
+            <button class="acceptFriend" >Kabul Et</button>
+            <button class="rejectFriend">Reddet</button>
+        `;
+        list.appendChild(listItem);
+
+        // Bind click event to the accept button
+        listItem.querySelector('.acceptFriend').addEventListener('click', function () {
+            listItem.innerHTML = ' ';
+            acceptFriendRequest(userId);
+        });
+
+        // Bind click event to the reject button
+        listItem.querySelector('.rejectFriend').addEventListener('click', function () {
+            listItem.innerHTML = ' ';
+            rejectFriendRequest(userId);
+        });
+    }
+
+
+}
+
+
+
+function acceptFriendRequest(friendshipId) {
+
+    fetch(`https://${window.location.hostname}:8000/api/accept-friend-request/${friendshipId}/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        credentials: 'include',
+    })
+    .then(response => {
+        if (response.ok) {
+            console.log('Arkadaşlık isteği kabul edildi');
+            // Burada kullanıcı arayüzünü güncelleyin
+            fetchFriendsList();
+        } else {
+            console.error('Arkadaşlık isteği kabul edilemedi');
+        }
+    })
+    .catch(error => console.error('Error:', error));
+}
+
+function rejectFriendRequest(friendshipId) {   
+
+    fetch(`https://${window.location.hostname}:8000/api/delete-friend-request/${friendshipId}/`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        credentials: 'include',
+    })
+    .then(response => {
+        if (response.ok) {
+            console.log('Arkadaşlık isteği silindi');
+            // Burada kullanıcı arayüzünü güncelleyin
+        } else {
+            console.error('Arkadaşlık isteği silinemedi');
+        }
+    })
+    .catch(error => console.error('Error:', error));
+
+}
+
+
+
+function fetchAllUsers() {
+
+    fetch(`https://${window.location.hostname}:8000/api/users/`, {
+        method: 'GET',
+        credentials: 'include'
+    })
+    .then(response => response.json())
+    .then(users => {
+        const usersListDiv = document.getElementById('usersList');
+        usersListDiv.innerHTML = ''; 
+        users.forEach(user => {
+            const userDiv = document.createElement('div');
+            console.log(user);
+            userDiv.innerHTML = `
+                <span>${user.username}</span>
+                <span>${user.id}</span>
+                <button onclick="sendFriendRequest(${user.id})">Arkadaş Ekle</button>
+            `;
+            usersListDiv.appendChild(userDiv);
+        });
+    })
+    .catch(error => console.error('Error:', error));
+}
+
+function sendFriendRequest(userId) {
+
+    fetch(`https://${window.location.hostname}:8000/api/send-friend-request/${userId}/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken  // CSRF token ekleyin
+        },
+        credentials: 'include',
+    })
+    .then(response => {
+        if (response.ok) {
+            console.log('Arkadaşlık isteği gönderildi');
+        } else {
+            console.error('Arkadaşlık isteği gönderilemedi');
+        }
+    })
+    .catch(error => console.error('Error:', error));
+}
+
+
+function fetchFriendsList() {
+    const friendsListDiv = document.getElementById('friends'); 
+    fetch(`https://${window.location.hostname}:8000/api/friends-list/`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+    })
+    .then(response => response.json())
+    .then(friends => {
+        console.log(friends);
+        friendsListDiv.innerHTML = ''; 
+        friends .forEach(friend => {
+
+            const listItem = document.createElement('li');
+            listItem.innerHTML = `
+                => ${friend.username} 
+                <button class="deleteFriend">Arkadaşlıktan çıkar</button>
+            `;
+            friendsListDiv.appendChild(listItem);
+
+            listItem.querySelector('.deleteFriend').addEventListener('click', function () {
+                // listItem.innerHTML = ' ';
+                deleteFriend(friend.friendship_id);
+            });
+        });
+    })
+    .catch(error => console.error('Error:', error));
+}
+
+
+
+function deleteFriend(friendshipId) 
+{
+    fetch(`https://${window.location.hostname}:8000/api/delete-friendship/${friendshipId}/`, {
+    method: 'DELETE',
+    headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken
+    },
+    credentials: 'include'
+    })
+    .then(response => {
+        if (response.ok) {
+            console.log('Arkadaşlık ilişkisi silindi');
+        } else {
+            console.error('Arkadaşlık ilişkisi silinemedi');
+        }
+    })
+    .catch(error => console.error('Error:', error)); 
+}
+
 
 
 function initializeLoginForm() {
@@ -289,6 +506,8 @@ function initializeLoginForm() {
         });
     });
 }
+
+
 
 function initializeRegisterForm() {
     document.getElementById('registerForm').addEventListener('submit', function (e) {
@@ -479,6 +698,14 @@ function initializeMultiGame() {
                 routePage('/match-history');
 
             };
+        }else if(action === 'friend_request')
+        {
+            const fromUser = data.from_user;
+            console.log(`${fromUser} sizi arkadaş olarak eklemek istiyor.`);
+        }else if(action === 'friend_request_response')
+        {
+            const response = data.response;
+            console.log(`Arkadaşlık isteği ${response}`);
         }
     });
     
@@ -613,3 +840,276 @@ function hideLoadingIcon() {
 }
 
 
+
+
+
+
+
+
+
+let tournamentSocket;
+let createdtournamentId; 
+/** TURNUVA*****/
+function createTournament()
+{
+    document.getElementById('createTournament').addEventListener('click', function() {
+        document.getElementById('tournamentFormContainer').style.display = 'flex';
+        document.getElementById('tournamentForm').style.display = 'block';
+
+        createTournomentForms()
+    });
+}
+
+
+window.onclick = function(event) {
+    let modal = document.getElementById('tournamentFormContainer');
+    if (event.target === modal) {
+        modal.style.display = "none";
+    }
+}
+
+function createTournomentForms()
+{
+    document.getElementById('createTournamentForm').addEventListener('click', function() {
+    
+    
+        var tournamentName = document.getElementById('tournamentName').value;
+        var nickname = document.getElementById('nickname').value;
+    
+        document.getElementById('tournamentFormContainer').style.display = 'none';
+    
+            setTimeout(() => { 
+                if (tournamentSocket.readyState === WebSocket.OPEN) {
+                    tournamentSocket.send(JSON.stringify({
+                        action: 'create_tournament',
+                        name: tournamentName,
+                        nickname: nickname
+                    }));
+                }
+            }, 1000);
+    });
+
+    history.pushState(null, '', '/tournament-page');
+    routePage('/tournament-page');
+    
+}
+
+
+
+
+
+function initializeTournamentWebSocket() {
+    const tournamentServerUrl = `wss://${window.location.hostname}:8000/ws/tournaments/`;
+    tournamentSocket= new WebSocket(tournamentServerUrl);
+
+    tournamentSocket.addEventListener('open', (event) => {
+        console.log('Turnuva WebSocket bağlantısı açıldı.');
+    });
+
+    tournamentSocket.addEventListener('close', (event) => {
+        console.log('Turnuva WebSocket bağlantısı kapandı.');
+    });
+
+    tournamentSocket.addEventListener('message', (event) => {
+        const data = JSON.parse(event.data);
+        if(data.action && data.action === "tournament_update") {
+            createdtournamentId = data.tournament.id;
+            fetchTournaments();
+        }
+    });
+}
+
+
+
+function fetchTournaments() {
+    // Turnuva bilgilerini çek
+    fetch(`https://${window.location.hostname}:8000/api/tournaments/`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        credentials: 'include'
+    })
+    .then(response => response.json())
+    .then(tournaments => {
+        fetchUserParticipations().then(participations => {
+            const tournamentsList = document.getElementById('tournaments');
+            tournamentsList.innerHTML = ''; // Listeyi temizle
+            tournaments.forEach(tournament => {
+                const li = document.createElement('li');
+                li.innerText = tournament.name;  // Turnuva adı
+
+                if (participations.includes(tournament.id)) {
+                    li.appendChild(document.createTextNode(" (Katıldınız)"));
+                } else {
+                    const joinButton = document.createElement('button');
+                    joinButton.innerText = 'Turnuvaya Katıl';
+                    joinButton.onclick = function() {
+                        joinTournament(tournament.id); // Turnuvaya katılma işlevi
+                    };
+                    li.appendChild(joinButton);
+                }
+                tournamentsList.appendChild(li);
+            });
+        });
+    })
+    .catch(error => console.error('Error fetching tournaments:', error));
+}
+
+function joinTournament(tournamentId) {
+    document.getElementById('joinTournamentModal').style.display = 'block';
+    
+    document.getElementById('joinTournamentButton').onclick = function() {
+        var nickname = document.getElementById('joinNickname').value; // Nickname al
+        document.getElementById('joinTournamentModal').style.display = 'none'; // Modal'ı kapat
+
+        joinTournamentRequest(tournamentId, nickname);
+    };
+}
+
+
+function joinTournamentRequest(tournamentId, nickname) {
+    fetch(`https://${window.location.hostname}:8000/api/join_tournament/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+            tournamentId: tournamentId,
+            nickname: nickname
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log(data);
+        fetchTournaments();
+
+        history.pushState(null, '', '/tournament-page');
+        routePage('/tournament-page');
+    })
+    .catch(error => console.error('Error joining tournament:', error));
+}
+
+function fetchUserParticipations() {
+    return fetch(`https://${window.location.hostname}:8000/api/user_participations/`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        credentials: 'include'
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Kullanıcının katıldığı turnuvaların ID'lerini döndür
+        return data.map(participation => participation.tournamentId);
+    });
+}
+
+
+function fetchTournamentParticipants() {
+    console.log(createdtournamentId);
+    fetch(`https://${window.location.hostname}:8000/api/tournaments/${createdtournamentId}/participants/`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        credentials: 'include'
+    })
+    .then(response => response.json())
+    .then(participants => {
+        const participantsList = document.getElementById('tournamenyUsers');
+        participantsList.innerHTML = ''; // Listeyi temizle
+        participants.forEach(participant => {
+            const li = document.createElement('li');
+            li.innerText = `${participant.nickname} (${participant.user})`;  // Katılımcının nickname ve username'i
+            participantsList.appendChild(li);
+        });
+    })
+    .catch(error => console.error('Error fetching tournament participants:', error));
+
+
+    document.getElementById('exitTournament').addEventListener('click', function() {
+        // Burada aktif turnuvanın ID'sini sağlayın
+        fetch(`https://${window.location.hostname}:8000/api/tournaments/${createdtournamentId}/exit/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            credentials: 'include'
+        })
+        .then(response => {
+            if(response.ok) {
+                return response.json();
+            } else {
+                throw new Error('Failed to exit tournament');
+            }
+        })
+        .then(data => {
+            console.log(data.message);
+            // Kullanıcıyı başka bir sayfaya yönlendir veya turnuva sayfasını güncelle
+            fetchTournaments();
+        })
+        .catch(error => console.error('Error:', error));
+    });
+    
+
+}
+
+
+
+
+
+// function updateTournamentsList(tournament) {
+//     const tournamentsList = document.getElementById('tournaments');
+//     console.log(tournamentsList);
+//     const li = document.createElement('li');
+//     li.innerText = tournament.name;  // Turnuva adı
+
+//     const joinButton = document.createElement('button');
+//     joinButton.innerText = 'Turnuvaya Katıl';
+//     joinButton.onclick = function() {
+//         // Katılma işlemi (Örn: katılma isteği gönderme, katılma sayfasına yönlendirme)
+//     };
+
+//     li.appendChild(joinButton);
+//     tournamentsList.appendChild(li);
+// }
+
+
+
+// function fetchTournaments() {
+//     fetch('https://${window.location.hostname}:8000/api/tournaments/', {
+//         method: 'GET',
+//         headers: {
+//             'Content-Type': 'application/json',
+//             'X-CSRFToken': csrfToken
+//         },
+//         credentials: 'include'
+
+//     }) 
+//         .then(response => response.json())
+//         .then(tournaments => {
+//             const tournamentsList = document.getElementById('tournamentsList');
+//             tournamentsList.innerHTML = ''; // Listeyi temizle
+//             tournaments.forEach(tournament => {
+//                 const li = document.createElement('li');
+//                 li.innerText = tournament.name;  // Turnuva adı
+
+//                 // Turnuvaya Katıl butonu
+//                 const joinButton = document.createElement('button');
+//                 joinButton.innerText = 'Turnuvaya Katıl';
+//                 joinButton.onclick = function() {
+//                     // Katılma işlemi (Örn: katılma isteği gönderme, katılma sayfasına yönlendirme)
+//                 };
+//                 li.appendChild(joinButton);
+//                 tournamentsList.appendChild(li);
+//             });
+//         })
+//         .catch(error => console.error('Error fetching tournaments:', error));
+// }

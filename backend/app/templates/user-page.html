@@ -1,6 +1,6 @@
 USER PAGE
 {% load static %}
-
+<div style="display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; gap: 40px;">
 <button id="logoutButton" class="btn btn-primary">Çıkış Yap</button>
 <button id="searchGameButton" class="btn btn-primary">MULTİ OYUN ARA</button>
 
@@ -17,5 +17,53 @@ USER PAGE
 
 
 
+<button id="showMatchHistory" class="btn btn-primary">Maç geçmişine bak</button>
 
-<buttom id="showMatchHistory" class="btn btn-primary">Maç geçmişine bak</buttom>
+
+<button id="createTournament" class="btn btn-primary">Turnuva Oluştur</button>
+
+
+    <div>
+        <h1>Turnuvalar</h1>
+        <ul id="tournaments">
+
+        </ul>
+    </div>
+
+    <div id="joinTournamentModal" style="display: none;">
+        <div>
+            <input type="text" id="joinNickname" placeholder="Nickname"/>
+            <button id="joinTournamentButton">Katıl</button>
+        </div>
+    </div>
+    
+
+    <div id="tournamentFormContainer" style="display: none;">
+        <div id="tournamentForm" style="display: none;">
+            <input type="text" id="tournamentName" placeholder="Turnuva Adı"/>
+            <input type="text" id="nickname" placeholder="Nickname"/>
+            <button id="createTournamentForm">Oluştur</button>
+        </div>
+    </div>
+
+</div>
+
+<div style="display: flex; flex-direction: row; gap: 30px; justify-content: center; align-items: center; margin-top: 30px;">
+    <div id="usersList">
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 30px;">
+        <div id="friendsList">
+            <h2>Arkadaşlar</h2>
+            <ul id="friends">
+
+            </ul>
+        </div>
+
+        <div id="friendRequests">
+            <h2>Arkadaşlık İstekleri</h2>
+            <ul id="friendRequestsList">
+            </ul>
+        </div>
+    </div>
+</div>
